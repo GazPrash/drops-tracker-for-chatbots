@@ -13,6 +13,10 @@ this codebase supports:
 - load testing tool to simulate 50+ concurrent clients
 - web dashboard to visualize pipeline health
 
+## Demo
+<img width="1387" height="652" alt="Screenshot 2026-07-06 at 8 10 30 AM" src="https://github.com/user-attachments/assets/42790d7d-2e0f-4698-9ec0-9b9e3b834b25" />
+
+
 ## System Requirements
 
 you need **Go** and **Redis** installed to run this project.
