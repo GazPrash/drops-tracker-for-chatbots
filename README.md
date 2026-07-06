@@ -76,5 +76,12 @@ to reset the tracker.db stats.
 Run the built-in load tester to simulate concurrent users:
 ```bash
 make loadtest
+
 ```
-This will output a terminal report and the web dashboard will update in real-time.
+and then run using:
+```bash
+./bin/loadtest --users=100 --messages=20
+
+```
+this will output a terminal report and the web dashboard will update in real-time.
+drop rates and evrything according to the set sliders.
