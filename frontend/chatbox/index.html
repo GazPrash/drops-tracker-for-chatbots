@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Chatbot Client</title>
+	<style>
+		body { background: #1e1e1e; color: #fff; font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+		#chat { border: 1px solid #444; height: 400px; overflow-y: auto; padding: 10px; background: #2a2a2a; margin-bottom: 10px; }
+		.msg { margin: 5px 0; padding: 10px; border-radius: 5px; max-width: 80%; }
+		.user { background: #2196F3; margin-left: auto; }
+		.ai { background: #4CAF50; margin-right: auto; }
+		input[type="text"] { width: 75%; padding: 10px; }
+		button { width: 20%; padding: 10px; cursor: pointer; background: #2196F3; border: none; color: white; }
+		#status { color: #f44336; margin-bottom: 10px; }
+	</style>
+</head>
+<body>
+	<h2>Chatbot Client <span id="status">🔴 Disconnected</span></h2>
+	<div id="chat"></div>
+	<div>
+		<input type="text" id="input" placeholder="Type a message..." onkeypress="if(event.key==='Enter') send()">
+		<button onclick="send()">Send</button>
+	</div>
+
+	<script>
+		const ws = new WebSocket("ws://localhost:8080/ws");
+		const sessionId = crypto.randomUUID();
+		const chat = document.getElementById("chat");
+
+		ws.onopen = () => {
+			document.getElementById("status").innerText = "🟢 Connected";
+			document.getElementById("status").style.color = "#4CAF50";
+			ws.send(JSON.stringify({ type: "register", payload: { session_id: sessionId } }));
+		};
+
+		ws.onclose = () => {
+			document.getElementById("status").innerText = "🔴 Disconnected";
+			document.getElementById("status").style.color = "#f44336";
+		};
+
+		function addMsg(content, cls) {
+			const div = document.createElement("div");
+			div.className = "msg " + cls;
+			div.innerText = content;
+			chat.appendChild(div);
+			chat.scrollTop = chat.scrollHeight;
+		}
+
+		function send() {
+			const input = document.getElementById("input");
+			const val = input.value.trim();
+			if (!val) return;
+			input.value = "";
+			addMsg(val, "user");
+
+			const msgId = crypto.randomUUID();
+			ws.send(JSON.stringify({
+				type: "user_message",
+				payload: {
+					message_id: msgId, correlation_id: msgId,
+					session_id: sessionId, content: val,
+					timestamp: Date.now()
+				}
+			}));
+		}
+
+		ws.onmessage = (e) => {
+			const msg = JSON.parse(e.data);
+			if (msg.type === "ai_chunk") {
+				const chunk = msg.payload;
+				addMsg("[" + chunk.chunk_index + "/" + chunk.total_chunks + "] " + chunk.content, "ai");
+				
+				ws.send(JSON.stringify({
+					type: "ack",
+					payload: {
+						chunk_id: chunk.chunk_id, correlation_id: chunk.correlation_id,
+						session_id: sessionId, timestamp: Date.now()
+					}
+				}));
+			}
+		};
+	</script>
+</body>
+</html>

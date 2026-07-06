@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Drop Tracker Dashboard</title>
+	<style>
+		body { background: #1e1e1e; color: #fff; font-family: sans-serif; padding: 20px; }
+		.box { border: 1px solid #444; padding: 15px; margin-bottom: 20px; background: #2a2a2a; border-radius: 4px; }
+		.flex { display: flex; gap: 20px; }
+		.hop { text-align: center; background: #333; padding: 10px; border-radius: 4px; min-width: 120px;}
+		.rate { font-size: 1.5em; font-weight: bold; margin-top: 5px; }
+		.good { color: #4CAF50; } .warn { color: #FFC107; } .bad { color: #F44336; }
+		.controls input { margin: 10px 0; }
+		button { padding: 5px 15px; cursor: pointer; background: #4CAF50; border: none; color: white; border-radius: 3px; }
+	</style>
+</head>
+<body>
+	<h1>Message Drop Tracker</h1>
+	<div class="box">
+		<h3>Pipeline Health</h3>
+		<div class="flex" id="pipeline"></div>
+	</div>
+	
+	<div class="flex">
+		<div class="box" style="flex:1">
+			<h3>Fault Injection Controls</h3>
+			<div class="controls">
+				<label>gateway.publish (Gateway)</label><br>
+				<input type="range" id="gateway.publish" min="0" max="1" step="0.05" value="0" onchange="updateFault('http://localhost:8080/fault/rates', 'gateway.publish', this.value)"> <span id="val-gateway.publish">0</span><br>
+				
+				<label>gateway.deliver (Gateway)</label><br>
+				<input type="range" id="gateway.deliver" min="0" max="1" step="0.05" value="0" onchange="updateFault('http://localhost:8080/fault/rates', 'gateway.deliver', this.value)"> <span id="val-gateway.deliver">0</span><br>
+				
+				<label>pubsub.deliver (Backend)</label><br>
+				<input type="range" id="pubsub.deliver" min="0" max="1" step="0.05" value="0" onchange="updateFault('http://localhost:8083/fault/rates', 'pubsub.deliver', this.value)"> <span id="val-pubsub.deliver">0</span><br>
+
+				<label>backend.process (Backend)</label><br>
+				<input type="range" id="backend.process" min="0" max="1" step="0.05" value="0" onchange="updateFault('http://localhost:8083/fault/rates', 'backend.process', this.value)"> <span id="val-backend.process">0</span><br>
+
+				<label>backend.emit (Backend)</label><br>
+				<input type="range" id="backend.emit" min="0" max="1" step="0.05" value="0" onchange="updateFault('http://localhost:8083/fault/rates', 'backend.emit', this.value)"> <span id="val-backend.emit">0</span><br>
+			</div>
+			<br><button onclick="resetAll()">Reset All Faults</button>
+		</div>
+		
+		<div class="box" style="flex:1">
+			<h3>Overall Stats</h3>
+			<div id="stats"></div>
+		</div>
+	</div>
+
+	<script>
+		function updateFault(url, hop, val) {
+			document.getElementById('val-'+hop).innerText = val;
+			fetch(url, {
+				method: 'POST',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({hop: hop, rate: parseFloat(val)})
+			});
+		}
+
+		function resetAll() {
+			const urls = ['http://localhost:8080/fault/reset', 'http://localhost:8083/fault/reset'];
+			urls.forEach(url => fetch(url, {method: 'POST'}));
+			document.querySelectorAll('input[type="range"]').forEach(el => {
+				el.value = 0;
+				document.getElementById('val-'+el.id).innerText = 0;
+			});
+		}
+
+		function getColor(rate) {
+			if (rate < 0.01) return 'good';
+			if (rate < 0.05) return 'warn';
+			return 'bad';
+		}
+
+		async function refresh() {
+			try {
+				const res = await fetch('/api/stats');
+				const data = await res.json();
+				
+				const hops = [
+					{id: 'gateway.publish', name: 'Gateway Publish'},
+					{id: 'pubsub.deliver', name: 'Pub/Sub Deliver'},
+					{id: 'backend.process', name: 'Backend Process'},
+					{id: 'backend.emit', name: 'Backend Emit'},
+					{id: 'gateway.deliver', name: 'Gateway Deliver'},
+					{id: 'client.ack', name: 'Client ACK'}
+				];
+
+				let html = '';
+				hops.forEach(h => {
+					const drop = data.drops_by_hop[h.id];
+					const pct = (drop.rate * 100).toFixed(1);
+					html += `<div class="hop">
+						<div>${h.name}</div>
+						<div class="rate ${getColor(drop.rate)}">${pct}%</div>
+						<small>${drop.count} drops</small>
+					</div>`;
+					if (h.id !== 'client.ack') {
+						html += '<div style="align-self:center">→</div>';
+					}
+				});
+				document.getElementById('pipeline').innerHTML = html;
+
+				document.getElementById('stats').innerHTML = `
+					<p>Total Messages Sent: ${data.total_messages}</p>
+					<p>Total Chunks Expected: ${data.total_chunks_expected}</p>
+					<p>Total Chunks ACKed: ${data.total_chunks_acked}</p>
+				`;
+
+			} catch(e) {}
+		}
+
+		setInterval(refresh, 2000);
+		refresh();
+	</script>
+</body>
+</html>
